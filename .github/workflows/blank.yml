@@ -1,0 +1,51 @@
+name: Magisk Root Builder
+
+on:
+  workflow_dispatch:
+
+jobs:
+  magisk_build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Set up work dir
+        run: mkdir -p work
+
+      - name: Download boot.img
+        run: curl -L "$BOOT_IMG" -o work/boot.img
+        env:
+          BOOT_IMG: ${{ secrets.BOOT_IMG }}
+
+      - name: Download vbmeta.img
+        run: curl -L "$VBMETA_IMG" -o work/vbmeta.img
+        env:
+          VBMETA_IMG: ${{ secrets.VBMETA_IMG }}
+
+      - name: Clone Magisk
+        run: |
+          git clone https://github.com/topjohnwu/magisk.git
+          cd magisk
+          ./build.py patch ../work/boot.img
+          mv out/patched-boot.img ../work/patched_boot.img
+
+      - name: Download avbtool
+        run: |
+          wget https://github.com/osm0sis/Android-Image-Kitchen/raw/master/tools/avbtool
+          chmod +x avbtool
+          sudo mv avbtool /usr/local/bin/
+
+      - name: Sign patched_boot.img with avbtool
+        run: |
+          avbtool add_hash_footer \
+            --image work/patched_boot.img \
+            --partition_size 67108864 \
+            --partition_name boot \
+            --key testkey.pem \
+            --algorithm SHA256_RSA2048
+        # شما می‌تونی کلید خودتو بزاری اینجا یا از testkey برای تست استفاده کنی
+
+      - name: Upload patched_boot.img
+        uses: actions/upload-artifact@v4
+        with:
+          name: patched_boot
+          path: work/patched_boot.img
